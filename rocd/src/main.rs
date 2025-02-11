@@ -1,25 +1,55 @@
 // ROC/rocd/src/main.rs
 
-use std::io::{self, prelude::*, Read, Write};
-use std::net::{self, TcpListener, TcpStream};
-use std::thread;
+use serde_json::{self, json, Value};
+use std::io::{self, prelude::*, BufReader, Write};
+use std::net::TcpStream;
 
-fn main() -> io::Result<()> {
+fn main() {
     let mut stream = TcpStream::connect("127.0.0.1:9879").expect("could not connect to server!");
 
-    // let's write and see ..
-    // it should echo back
-    let test_msg = "Hello server!".as_bytes();
-    stream.write_all(test_msg)?;
-    eprintln!("Sent message to server: {:#?}", test_msg);
+    loop {
+        // we gotta take commands from the user in the terminal ..!
+        let mut input = String::new();
+        print!("> ");
+        io::stdout().flush().unwrap();
+        io::stdin().read_line(&mut input).unwrap();
 
-    let mut buffer = [0u8; 1500];
-    let bytes_read = stream.read(&mut buffer)?;
+        // parse the command --- simple parse for now
+        let input = input.trim();
+        let request = match input.split_whitespace().collect::<Vec<&str>>().as_slice() {
+            ["PING"] => {
+                json!({"command" : "PING"})
+            }
+            ["STORE", key, value] => {
+                json!({"command" : "STORE",
+                "key" : key,
+                "value" : value})
+            }
+            ["FETCH", key] => {
+                json!({"command" : "FETCH",
+                "key" : key})
+            }
+            ["EXIT"] => {
+                break;
+            }
+            _ => {
+                println!("Invalid command!");
+                continue;
+            }
+        };
 
-    eprintln!(
-        "echoed back from the server: {}",
-        String::from_utf8_lossy(&buffer[..bytes_read])
-    );
+        // let's send the json request
+        serde_json::to_writer(&mut stream, &request).unwrap();
+        stream.flush().unwrap();
 
-    Ok(())
+        let mut reader = BufReader::new(&stream);
+        let mut response = String::new();
+        reader.read_line(&mut response).unwrap();
+
+        // now thatwe have read the response of the server .. let's parse it
+        match serde_json::from_str::<Value>(&response) {
+            Ok(res) => println!("Response: {}", res),
+            Err(_) => println!("Encountered Error!"),
+        }
+    }
 }

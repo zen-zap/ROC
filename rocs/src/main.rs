@@ -1,22 +1,20 @@
 // ROC/rocs/src/main.rs
 
-use std::io::prelude::*;
+use serde_json::{self, json, Value};
 use std::io::{self, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::thread;
 
 fn main() -> io::Result<()> {
-    let mut buffer = [0u8; 1500];
-
-    let mut listener = TcpListener::bind("127.0.0.1:9879")?;
+    let listener = TcpListener::bind("127.0.0.1:9879")?;
 
     // to handle the clients connected on the port
     for stream in listener.incoming() {
-        match (stream) {
+        match stream {
             Ok(stream) => {
                 eprintln!("received connection : {:#?}", stream);
 
-                thread::spawn(move || handle_client(stream, &mut buffer));
+                thread::spawn(move || handle_client(stream));
             }
             Err(e) => {
                 eprintln!("Encountered error while receiving connection: {:#?}", e);
@@ -27,20 +25,42 @@ fn main() -> io::Result<()> {
     Ok(())
 }
 
-fn handle_client(mut stream: TcpStream, buffer: &mut [u8]) {
-    // read from the stream and return the number of bytes read
-    let bytes_read = stream.read(buffer).unwrap();
-    if bytes_read == 0 {
-        // no bytes read
-        eprintln!("No bytes read");
-        // close the connection
-        eprintln!("Closing the connection");
-        return;
-    } else {
-        eprintln!("Connected to server at 127.0.0.1:9879");
+fn handle_client(mut stream: TcpStream) {
+    let mut buffer = Vec::new();
 
-        eprintln!("Received data: {:?}", &buffer[..bytes_read]);
-        // echo back for testing
-        stream.write_all(&buffer[..bytes_read]).unwrap();
+    if let Err(err) = stream.read_to_end(&mut buffer) {
+        eprintln!("failed to read into the buffer, error: {}", err);
+        return;
     }
+
+    let request: Value = match serde_json::from_slice(&buffer) {
+        Ok(req) => req,
+        Err(_) => {
+            eprintln!("Invalid json received");
+            let error_response = json!({"status" : "ERROR",
+            "message" : "Invalid JSON!"});
+
+            stream.write_all(error_response.to_string().as_bytes()).ok();
+            return;
+        }
+    };
+
+    let response = match request["command"].as_str() {
+        Some("PING") => {
+            json!({"status" : "PONG"})
+        }
+        Some("STORE") => {
+            json!({"status" : "OK"})
+        }
+        Some("FETCH") => {
+            json!({"status" : "OK", "value" : "Dummmy_val"})
+        }
+        _ => {
+            json!({"status" : "ERROR!"})
+        }
+    };
+
+    stream
+        .write_all(response.to_string().as_bytes())
+        .expect("Failed to send a response!");
 }

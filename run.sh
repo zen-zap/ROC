@@ -1,9 +1,9 @@
 #!/bin/bash
 
 echo "Starting the ROC Server"
-(cd rocs && cargo run &)
+gnome-terminal -- bash -c "cd rocs && cargo run; exec bash"
 
 sleep 2
 
 echo "Starting the ROC Driver"
-(cd rocd && cargo run)
+gnome-terminal -- bash -c "cd rocd && cargo run; exec bash"
