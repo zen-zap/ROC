@@ -10,7 +10,7 @@ fn main() {
     loop {
         // we gotta take commands from the user in the terminal ..!
         let mut input = String::new();
-        print!("> ");
+        print!("(roc)> ");
         io::stdout().flush().unwrap();
         io::stdin().read_line(&mut input).unwrap();
 
