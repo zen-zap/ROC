@@ -43,7 +43,9 @@ fn handle_client(mut stream: TcpStream) {
     while reader.read_line(&mut line).unwrap() != 0
     // this one reads into the above line variable
     {
+        eprintln!("Raw input line: {:?}", line);
         let command_str = line.trim();
+        eprintln!("Command string: {:?}", command_str);
 
         if !command_str.is_empty() {
             let request: Value = match serde_json::from_str::<Value>(command_str) {
@@ -61,6 +63,8 @@ fn handle_client(mut stream: TcpStream) {
                     continue;
                 }
             };
+
+            eprintln!("Parsed request: {:?}", request);
 
             let response = match request["command"].as_str() {
                 Some("PING") => {
@@ -94,9 +98,12 @@ fn handle_client(mut stream: TcpStream) {
                 }
             };
 
+            let reponse_str = response.to_string() + "\n";
             stream
-                .write_all(response.to_string().as_bytes())
+                .write_all(reponse_str.as_bytes())
                 .expect("Failed to send a response!");
         }
+
+        line.clear();
     }
 }

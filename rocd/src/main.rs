@@ -7,6 +7,7 @@ use std::net::TcpStream;
 fn main() {
     let mut stream = TcpStream::connect("127.0.0.1:9879").expect("could not connect to server!");
 
+    eprintln!("Waiting for command...");
     loop {
         // we gotta take commands from the user in the terminal ..!
         let mut input = String::new();
@@ -16,6 +17,8 @@ fn main() {
 
         // parse the command --- simple parse for now
         let input = input.trim();
+        eprintln!("user command: {}", input);
+
         let request = match input.split_whitespace().collect::<Vec<&str>>().as_slice() {
             ["PING"] => {
                 json!({"command" : "PING"})
@@ -39,14 +42,16 @@ fn main() {
         };
 
         // let's send the json request
+        eprintln!("Gonna write this into the stream: {:?}", request);
         serde_json::to_writer(&mut stream, &request).unwrap();
+        write!(stream, "\n").unwrap();
         stream.flush().unwrap();
 
         let mut reader = BufReader::new(&stream);
         let mut response = String::new();
         reader.read_line(&mut response).unwrap();
 
-        // now thatwe have read the response of the server .. let's parse it
+        // now that we have read the response of the server .. let's parse it and display it ..
         match serde_json::from_str::<Value>(&response) {
             Ok(res) => println!("Response: {}", res),
             Err(_) => println!("Encountered Error!"),
