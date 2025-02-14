@@ -18,3 +18,21 @@ pub(crate) fn fetch_values(key: String) -> Option<String> {
 
     db.get(&key).map(|s| s.clone().to_string()) // just take the reference and return an OWNED value
 }
+
+pub(crate) fn list_all() -> Vec<(String, String)> {
+    let db = STORE.read().unwrap();
+
+    db.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+}
+
+pub(crate) fn delete_val(key: String) -> Option<String> {
+    let mut db = STORE.write().unwrap();
+
+    db.remove(&key)
+}
+
+pub(crate) fn update_val(key: String, val: String) {
+    let mut db = STORE.write().unwrap();
+
+    db.insert(key, val); // keep it simple for now .. store / update it anyways
+}

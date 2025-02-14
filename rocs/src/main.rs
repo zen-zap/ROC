@@ -68,7 +68,8 @@ fn handle_client(mut stream: TcpStream) {
 
             let response = match request["command"].as_str() {
                 Some("PING") => {
-                    json!({"status" : "Successfully Pinged!"})
+                    json!({"status" : "OK",
+                    "message": "Successfully Pinged!"})
                 }
                 Some("STORE") => {
                     if let (Some(key), Some(value)) =
@@ -91,6 +92,47 @@ fn handle_client(mut stream: TcpStream) {
                     } else {
                         json!({"status":"ERROR", "message":"Unable to get key from request", "type":"DEAD"})
                         // I don't know what this should be ..  but not being able to read the requests would be a critical issue
+                    }
+                }
+                Some("LIST") => {
+                    let all_entries = store::list_all();
+                    json!({
+                        "status":"OK",
+                        "data" : all_entries,
+                        "type" : "ALIVE"
+                    })
+                }
+                Some("DELETE") => {
+                    if let Some(key) = request["key"].as_str() {
+                        let del_val = store::delete_val(key.to_string()).unwrap();
+                        json!({
+                            "status":"OK",
+                            "message" : "Successfully deleted the key",
+                            "value" : del_val,
+                            "type" : "ALIVE"
+                        })
+                    } else {
+                        json!({
+                            "status" : "ERROR",
+                            "message" : "Error while removing the key",
+                            "type" : "ALIVE"
+                        })
+                    }
+                }
+                Some("UPDATE") => {
+                    if let (Some(key), Some(val)) =
+                        (request["key"].as_str(), request["value"].as_str())
+                    {
+                        store::update_val(key.to_string(), val.to_string());
+                        json!({
+                            "status" : "OK",
+                            "message" : "Value updated",
+                            "type" : "ALIVE"
+                        })
+                    } else {
+                        json!({"status":"ERROR",
+                            "message" : "Error Updating value",
+                            "type" : "ALIVE"})
                     }
                 }
                 _ => {

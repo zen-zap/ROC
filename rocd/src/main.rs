@@ -20,6 +20,7 @@ fn main() {
         eprintln!("user command: {}", input);
 
         let request = match input.split_whitespace().collect::<Vec<&str>>().as_slice() {
+            // as_slice() returns &[&str] -- like a slice of string slices
             ["PING"] => {
                 json!({"command" : "PING"})
             }
@@ -35,6 +36,18 @@ fn main() {
             ["EXIT"] => {
                 break;
             }
+            ["LIST"] => {
+                json!({"command" : "LIST"})
+            }
+            ["UPDATE", key, value] => {
+                json!({"command" : "UPDATE",
+                "key" : key,
+                "value" : value})
+            }
+            ["DELETE", key] => {
+                json!({"command" : "DELETE",
+                "key" : key})
+            }
             _ => {
                 println!("Invalid command!");
                 continue;
@@ -42,7 +55,7 @@ fn main() {
         };
 
         // let's send the json request
-        eprintln!("Gonna write this into the stream: {:?}", request);
+        // eprintln!("Gonna write this into the stream: {:?}", request);
         serde_json::to_writer(&mut stream, &request).unwrap();
         write!(stream, "\n").unwrap();
         stream.flush().unwrap();
@@ -53,7 +66,7 @@ fn main() {
 
         // now that we have read the response of the server .. let's parse it and display it ..
         match serde_json::from_str::<Value>(&response) {
-            Ok(res) => println!("Response: {}", res),
+            Ok(res) => println!("Response: {:#?}", res),
             Err(_) => println!("Encountered Error!"),
         }
     }
