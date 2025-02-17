@@ -1,5 +1,6 @@
 // ROC/rocs/src/main.rs
 
+mod logger;
 mod store;
 
 use serde_json::{self, json, Value};
@@ -141,6 +142,11 @@ fn handle_client(mut stream: TcpStream) {
             };
 
             let reponse_str = response.to_string() + "\n";
+
+            logger::store_log(&response); // added logger support .. I mean fuck is it this simple?
+
+            // support for recovery? ..
+
             stream
                 .write_all(reponse_str.as_bytes())
                 .expect("Failed to send a response!");
