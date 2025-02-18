@@ -1,10 +1,12 @@
 // Code/ROC/rocs/src/logger.rs
 
 use bincode;
-use serde_json::{Result, Value};
-use std::fs::{self, File, OpenOptions};
-use std::io::{self, BufWriter, Result, Write};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use std::fs::{self, OpenOptions};
+use std::io::{self, BufWriter, Write};
 use std::path::Path;
+use std::time::{SystemTime, UNIX_EPOCH}; // “1970-01-01 00:00:00 UTC”
 
 // Write Ahead Logging [WAL]     --- used for recovery and such
 pub(crate) fn store_log(com: &Value) {
@@ -36,7 +38,7 @@ pub(crate) fn store_log(com: &Value) {
     writer.flush().expect("Failed to flush into wal log");
 }
 
-pub(crate) fn read_wal() -> io::Result<Vec<Value>, io::Error> {
+pub(crate) fn read_wal() -> io::Result<Vec<Value>> {
     // we gotta return a vector of all the instructions .. then there will probably some recoverer
     // that applies them to the database
     let file_path = Path::new("../logs/wal.log");
@@ -59,5 +61,73 @@ pub(crate) fn read_wal() -> io::Result<Vec<Value>, io::Error> {
         }
     }
 
-    entries
+    Ok(entries)
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct HealthEntry {
+    timestamp: u64,
+    status: String, // "CLEAN" or "DIRTY"
+}
+
+pub(crate) fn save_checkpoint(msg: String) {
+    let file_path = Path::new("../logs/health_checkpoints.log");
+    let file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(file_path)
+        .expect("Failed to create the health_checkpoints.log file");
+
+    let mut writer = BufWriter::new(file);
+
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("Time went backwards")
+        .as_secs();
+
+    let mut health_entry = HealthEntry {
+        timestamp: timestamp,
+        status: msg,
+    };
+
+    let encoded: Vec<u8> =
+        bincode::serialize(&health_entry).expect("Failed to encode the health check");
+
+    writer
+        .write_all((&encoded))
+        .expect("Failed to write checkpoints");
+
+    writer
+        .flush()
+        .expect("Failed to flush writer for health_checkpoints");
+}
+
+fn health_check() -> Option<String> {
+    let file_path = Path::new("../logs/health_checkpoints.log");
+
+    let mut data = match fs::read(file_path) {
+        Ok(data) => data,
+        Err(e) => {
+            eprintln!("encountered error : {}", e);
+            return None;
+        }
+    };
+
+    let mut last_status: Option<String> = None;
+
+    let mut slice = &data[..];
+
+    while !slice.is_empty() {
+        match bincode::deserialize::<HealthEntry>(&mut slice) {
+            Ok(entry) => {
+                last_status = Some(entry.status);
+            }
+            Err(e) => {
+                eprintln!("Failed to get the last checkpoint");
+                break;
+            }
+        }
+    }
+
+    last_status
 }
