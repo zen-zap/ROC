@@ -9,6 +9,9 @@ use std::net::{TcpListener, TcpStream};
 use std::thread;
 
 fn main() -> io::Result<()> {
+    // let's make an admin thread to control the server
+    thread::spawn(move || handle_admin());
+
     let listener = TcpListener::bind("127.0.0.1:9879")?;
 
     // to handle the clients connected on the port
@@ -44,9 +47,9 @@ fn handle_client(mut stream: TcpStream) {
     while reader.read_line(&mut line).unwrap() != 0
     // this one reads into the above line variable
     {
-        eprintln!("Raw input line: {:?}", line);
+        //eprintln!("Raw input line: {:?}", line);
         let command_str = line.trim();
-        eprintln!("Command string: {:?}", command_str);
+        //eprintln!("Command string: {:?}", command_str);
 
         if !command_str.is_empty() {
             let request: Value = match serde_json::from_str::<Value>(command_str) {
@@ -65,7 +68,9 @@ fn handle_client(mut stream: TcpStream) {
                 }
             };
 
-            eprintln!("Parsed request: {:?}", request);
+            //eprintln!("Parsed request: {:?}", request);
+
+            logger::store_log(&request);
 
             let response = match request["command"].as_str() {
                 Some("PING") => {
@@ -141,17 +146,49 @@ fn handle_client(mut stream: TcpStream) {
                 }
             };
 
-            let reponse_str = response.to_string() + "\n";
-
-            logger::store_log(&response); // added logger support .. I mean fuck is it this simple?
+            let response_str = response.to_string() + "\n";
 
             // support for recovery? ..
 
             stream
-                .write_all(reponse_str.as_bytes())
+                .write_all(response_str.as_bytes())
                 .expect("Failed to send a response!");
         }
 
         line.clear();
+    }
+}
+
+fn handle_admin() {
+    let stdin = io::stdin();
+    let mut reader = BufReader::new(stdin.lock());
+    // lock the current standard input so that no other process could read from it ..
+
+    let mut admin_line = String::new();
+
+    eprintln!("Admin interface started! Be careful with the commands");
+
+    loop {
+        admin_line.clear();
+        println!("roc-admin/~  ");
+        if let Ok(_) = reader.read_line(&mut admin_line)
+        // read the current command
+        {
+            let admin_cmd = admin_line.trim();
+            eprintln!("Admin command received: {:#?}", admin_cmd);
+            if admin_cmd.eq_ignore_ascii_case("SHUTDOWN") {
+                logger::save_checkpoint("CLEAN".to_string());
+                eprintln!("SHUTDOWN initiated!");
+
+                std::process::exit(0);
+            }
+            if admin_cmd.eq_ignore_ascii_case("CRASH") {
+                logger::save_checkpoint("DIRTY".to_string());
+                eprintln!("Intended crash by Admin  --- for testing purposes");
+                std::process::exit(0);
+            }
+        } else {
+            eprintln!("failed to read command from the admin");
+        }
     }
 }

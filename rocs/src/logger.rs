@@ -31,11 +31,19 @@ pub(crate) fn store_log(com: &Value) {
     let encoded: Vec<u8> =
         bincode::serialize(com).expect("Failed to convert the json into binary ..");
 
-    // Write to file
+    let len = encoded.len() as u32;
+    let len_header = len.to_le_bytes();
+
+    // writing the len_header first
+    writer
+        .write_all(&len_header)
+        .expect("Failed to write the length header into the log file");
+
+    // Write to wal.log
     writer
         .write_all(&encoded)
-        .expect("failed to write into the log file");
-    writer.flush().expect("Failed to flush into wal log");
+        .expect("failed to write the reader data into the log file");
+    writer.flush().expect("Failed to flush into wal.log");
 }
 
 pub(crate) fn read_wal() -> io::Result<Vec<Value>> {
@@ -94,7 +102,7 @@ pub(crate) fn save_checkpoint(msg: String) {
         bincode::serialize(&health_entry).expect("Failed to encode the health check");
 
     writer
-        .write_all((&encoded))
+        .write_all(&encoded)
         .expect("Failed to write checkpoints");
 
     writer
