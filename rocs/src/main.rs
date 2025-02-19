@@ -1,6 +1,7 @@
 // ROC/rocs/src/main.rs
 
 mod logger;
+mod recovery;
 mod store;
 
 use serde_json::{self, json, Value};
@@ -9,6 +10,15 @@ use std::net::{TcpListener, TcpStream};
 use std::thread;
 
 fn main() -> io::Result<()> {
+    match recovery::handle_recovery() {
+        Ok(()) => {
+            // pass
+        }
+        Err(e) => {
+            eprintln!("Encountered while recovery: {:#?}", e);
+        }
+    }
+
     // let's make an admin thread to control the server
     thread::spawn(move || handle_admin());
 
