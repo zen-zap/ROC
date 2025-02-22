@@ -1,21 +1,24 @@
 // ROC/rocs/src/main.rs
 
+mod command;
 mod logger;
 mod recovery;
 mod store;
 
+use crate::command::Command;
 use serde_json::{self, json, Value};
 use std::io::{self, BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
 use std::thread;
 
 fn main() -> io::Result<()> {
+    // handle the recovery
     match recovery::handle_recovery() {
-        Ok(()) => {
-            // pass
+        Ok(_) => {
+            // recovery success!
         }
-        Err(e) => {
-            eprintln!("Encountered while recovery: {:#?}", e);
+        Err(_) => {
+            // error during recovery
         }
     }
 
@@ -41,11 +44,6 @@ fn main() -> io::Result<()> {
     Ok(())
 }
 
-// In the responses .. we're also gonna include a type called: "ALIVE"
-//
-// "ALIVE" : server can still function ... issue can be resolved by user
-// "DEAD"  : server cannot function ... issue cannot be resolved by user
-
 fn handle_client(mut stream: TcpStream) {
     let reader_stream = stream
         .try_clone()
@@ -54,85 +52,79 @@ fn handle_client(mut stream: TcpStream) {
     let mut line = String::new();
 
     // let's setup to continuously read commands from the client
-    while reader.read_line(&mut line).unwrap() != 0
+    while let Ok(bytes_read) = reader.read_line(&mut line)
     // this one reads into the above line variable
     {
-        //eprintln!("Raw input line: {:?}", line);
-        let command_str = line.trim();
-        //eprintln!("Command string: {:?}", command_str);
+        if bytes_read == 0 {
+            break; // connection closed
+        }
+
+        let command_str = line.trim(); // eg. STORE ashu 12  -- something like this for now
 
         if !command_str.is_empty() {
             let request: Value = match serde_json::from_str::<Value>(command_str) {
                 Ok(req) => req,
                 Err(_) => {
                     eprintln!("Invalid json received");
-                    let error_response = json!(
-                        {"status" : "ERROR",
-                        "message" : "Invalid JSON!",
-                        "type":"ALIVE"}); // keep type as ALIVE since we can just ask the user to re-enter
-                                          // the json request
-
-                    stream.write_all(error_response.to_string().as_bytes()).ok();
+                    // Command::ERR {msg: "Invalid json received".to_string()}
+                    let error_response = json!({"error": "Invalid JSON received!"}).to_string();
+                    stream.write_all(error_response.as_bytes()).ok();
                     line.clear();
                     continue;
                 }
             };
 
-            //eprintln!("Parsed request: {:?}", request);
-
-            logger::store_log(&request);
-
-            let response = match request["command"].as_str() {
-                Some("PING") => {
-                    json!({"status" : "OK",
-                    "message": "Successfully Pinged!"})
-                }
+            let command: Command = match request["command"].as_str() {
+                Some("PING") => Command::Ping,
                 Some("STORE") => {
                     if let (Some(key), Some(value)) =
                         (request["key"].as_str(), request["value"].as_str())
                     {
                         store::store_values(key.to_string(), value.to_string());
-                        json!({"status":"OK", "message":"Successfully stored the values", "type":"ALIVE"})
+                        Command::Store {
+                            key: key.to_string(),
+                            value: value.to_string(),
+                        }
                     } else {
-                        json!({"status":"ERROR", "message":"Unable to read key_value pair from the request", "type":"DEAD"})
-                        // what should this be?... I mean this should be a critical issue right?
+                        Command::ERR {
+                            msg: "Unable to read key_value pair from the request".to_string(),
+                        }
                     }
                 }
                 Some("FETCH") => {
                     if let Some(key) = request["key"].as_str() {
-                        if let Some(value) = store::fetch_values(key.to_string()) {
-                            json!({"status":"OK", "value":value, "type":"ALIVE"})
+                        if let Some(val) = store::fetch_values(key.to_string()) {
+                            Command::Fetch {
+                                key: key.to_string(),
+                                value: Some(val),
+                            }
                         } else {
-                            json!({"status":"ERROR", "message":"Value not found in storage!", "type":"ALIVE"})
+                            Command::ERR {
+                                msg: "Value not found in storage!".to_string(),
+                            }
                         }
                     } else {
-                        json!({"status":"ERROR", "message":"Unable to get key from request", "type":"DEAD"})
-                        // I don't know what this should be ..  but not being able to read the requests would be a critical issue
+                        Command::ERR {
+                            msg: "Unable to get key from request".to_string(),
+                        }
                     }
                 }
                 Some("LIST") => {
                     let all_entries = store::list_all();
-                    json!({
-                        "status":"OK",
-                        "data" : all_entries,
-                        "type" : "ALIVE"
-                    })
+                    Command::List {
+                        entries: all_entries,
+                    }
                 }
                 Some("DELETE") => {
                     if let Some(key) = request["key"].as_str() {
-                        let del_val = store::delete_val(key.to_string()).unwrap();
-                        json!({
-                            "status":"OK",
-                            "message" : "Successfully deleted the key",
-                            "value" : del_val,
-                            "type" : "ALIVE"
-                        })
+                        let _ = store::delete_val(key.to_string()).unwrap();
+                        Command::Delete {
+                            key: key.to_string(),
+                        }
                     } else {
-                        json!({
-                            "status" : "ERROR",
-                            "message" : "Error while removing the key",
-                            "type" : "ALIVE"
-                        })
+                        Command::ERR {
+                            msg: "Error while removing the key".to_string(),
+                        }
                     }
                 }
                 Some("UPDATE") => {
@@ -140,26 +132,27 @@ fn handle_client(mut stream: TcpStream) {
                         (request["key"].as_str(), request["value"].as_str())
                     {
                         store::update_val(key.to_string(), val.to_string());
-                        json!({
-                            "status" : "OK",
-                            "message" : "Value updated",
-                            "type" : "ALIVE"
-                        })
+                        Command::Update {
+                            key: key.to_string(),
+                            value: val.to_string(),
+                        }
                     } else {
-                        json!({"status":"ERROR",
-                            "message" : "Error Updating value",
-                            "type" : "ALIVE"})
+                        Command::ERR {
+                            msg: "Error updating value".to_string(),
+                        }
                     }
                 }
-                _ => {
-                    json!({"status" : "ERROR!"})
-                }
+                _ => Command::ERR {
+                    msg: "unknown command".to_string(),
+                },
             };
 
-            let response_str = response.to_string() + "\n";
+            logger::store_log(&command);
 
-            // support for recovery? ..
+            let response = serde_json::to_string(&command)
+                .unwrap_or_else(|_| "{\"error\": \"Failed to serialize response\"}".to_string());
 
+            let response_str = response + "\n";
             stream
                 .write_all(response_str.as_bytes())
                 .expect("Failed to send a response!");
@@ -176,26 +169,43 @@ fn handle_admin() {
 
     let mut admin_line = String::new();
 
-    eprintln!("Admin interface started! Be careful with the commands");
+    eprintln!("Admin interface started!");
 
     loop {
         admin_line.clear();
-        println!("roc-admin/~  ");
-        if let Ok(_) = reader.read_line(&mut admin_line)
-        // read the current command
-        {
+        print!("roc-admin/~  ");
+        io::stdout().flush().ok();
+
+        if reader.read_line(&mut admin_line).is_ok() {
             let admin_cmd = admin_line.trim();
-            eprintln!("Admin command received: {:#?}", admin_cmd);
+            // eprintln!("Admin command received: {:#?}", admin_cmd);
+
             if admin_cmd.eq_ignore_ascii_case("SHUTDOWN") {
                 logger::save_checkpoint("CLEAN".to_string());
                 eprintln!("SHUTDOWN initiated!");
-
                 std::process::exit(0);
             }
             if admin_cmd.eq_ignore_ascii_case("CRASH") {
                 logger::save_checkpoint("DIRTY".to_string());
-                eprintln!("Intended crash by Admin  --- for testing purposes");
+                eprintln!("Simulated CRASH initiated for testing recovery");
                 std::process::exit(0);
+            }
+
+            if admin_cmd.eq_ignore_ascii_case("clear") {
+                let file_path = "../logs/wal.log";
+                let file = std::fs::OpenOptions::new()
+                    .create(true)
+                    .append(false)
+                    .open(file_path)
+                    .expect("Failed to clear the wal.log file");
+
+                use std::io::BufWriter;
+                let mut writer = BufWriter::new(file);
+
+                writer
+                    .write(b"")
+                    .expect("Failed to write into WAL in admin_cmd");
+                writer.flush().expect("Failed to flush! in admin clear WAL");
             }
         } else {
             eprintln!("failed to read command from the admin");
