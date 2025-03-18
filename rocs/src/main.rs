@@ -3,12 +3,14 @@
 mod command;
 mod logger;
 mod recovery;
+mod snapshot;
 mod store;
 
 use crate::command::Command;
 use serde_json::{self, json, Value};
 use std::io::{self, BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
+use std::path::Path;
 use std::thread;
 
 fn main() -> io::Result<()> {
@@ -21,6 +23,9 @@ fn main() -> io::Result<()> {
             // error during recovery
         }
     }
+
+    snapshot::take_snapshots("snaps/snapshots.json", 30);
+    // taking snapshots every 30 seconds for testing purposes ..
 
     // let's make an admin thread to control the server
     thread::spawn(move || handle_admin());
@@ -80,10 +85,11 @@ fn handle_client(mut stream: TcpStream) {
                     if let (Some(key), Some(value)) =
                         (request["key"].as_str(), request["value"].as_str())
                     {
-                        store::store_values(key.to_string(), value.to_string());
+                        let val: Result<usize, _> = value.parse();
+                        store::store_values(key.to_string(), val.clone().unwrap());
                         Command::Store {
                             key: key.to_string(),
-                            value: value.to_string(),
+                            value: val.unwrap(),
                         }
                     } else {
                         Command::ERR {
@@ -128,17 +134,36 @@ fn handle_client(mut stream: TcpStream) {
                     }
                 }
                 Some("UPDATE") => {
-                    if let (Some(key), Some(val)) =
+                    if let (Some(key), Some(value)) =
                         (request["key"].as_str(), request["value"].as_str())
                     {
-                        store::update_val(key.to_string(), val.to_string());
+                        let val: Result<usize, _> = value.parse();
+                        store::update_val(key.to_string(), val.clone().unwrap());
                         Command::Update {
                             key: key.to_string(),
-                            value: val.to_string(),
+                            value: val.unwrap(),
                         }
                     } else {
                         Command::ERR {
                             msg: "Error updating value".to_string(),
+                        }
+                    }
+                }
+                Some("RANGE") => {
+                    if let (Some(start_str), Some(end_str)) =
+                        (request["start"].as_str(), request["end"].as_str())
+                    {
+                        let start: usize = start_str.parse().unwrap_or(0);
+                        let end: usize = end_str.parse().unwrap_or(0);
+                        let entries = store::get_range(start, end);
+                        Command::Range {
+                            start: start,
+                            end: end,
+                            result: entries,
+                        }
+                    } else {
+                        Command::ERR {
+                            msg: "Invalid range parameters".to_string(),
                         }
                     }
                 }
@@ -181,6 +206,8 @@ fn handle_admin() {
             // eprintln!("Admin command received: {:#?}", admin_cmd);
 
             if admin_cmd.eq_ignore_ascii_case("SHUTDOWN") {
+                let _ = store::save_store(Path::new("../snaps/snapshots.json"));
+
                 logger::save_checkpoint("CLEAN".to_string());
                 eprintln!("SHUTDOWN initiated!");
                 std::process::exit(0);
@@ -191,21 +218,12 @@ fn handle_admin() {
                 std::process::exit(0);
             }
 
-            if admin_cmd.eq_ignore_ascii_case("clear") {
-                let file_path = "../logs/wal.log";
-                let file = std::fs::OpenOptions::new()
-                    .create(true)
-                    .append(false)
-                    .open(file_path)
-                    .expect("Failed to clear the wal.log file");
+            if admin_cmd.eq_ignore_ascii_case("snap") {
+                let _ = store::save_store(Path::new("../snaps/snapshots.json"));
+            }
 
-                use std::io::BufWriter;
-                let mut writer = BufWriter::new(file);
-
-                writer
-                    .write(b"")
-                    .expect("Failed to write into WAL in admin_cmd");
-                writer.flush().expect("Failed to flush! in admin clear WAL");
+            if admin_cmd.eq_ignore_ascii_case("clear wal") {
+                let _ = logger::clear_wal();
             }
         } else {
             eprintln!("failed to read command from the admin");

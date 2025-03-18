@@ -5,6 +5,13 @@ use std::io;
 
 pub fn handle_recovery() -> io::Result<()> {
     eprintln!("inside recovery module!");
+
+    if let Err(e) = store::load_store("../snaps/snapshots.json") {
+        eprintln!("Failed to load snapshot: {}", e);
+    } else {
+        eprintln!("Successfully loaded the snapshot");
+    }
+
     let last_checkpoint = logger::get_health_checkpoint();
 
     match last_checkpoint {
@@ -33,7 +40,7 @@ pub fn handle_recovery() -> io::Result<()> {
                     }
                 }
 
-                eprintln!("State recovery complete... can proceed with usual operation. Exiting recovery mode");
+                eprintln!("State recovery complete. Exiting recovery mode");
             }
         }
         _ => {

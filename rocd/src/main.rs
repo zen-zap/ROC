@@ -15,11 +15,26 @@ fn main() {
         io::stdout().flush().unwrap();
         io::stdin().read_line(&mut input).unwrap();
 
-        // parse the command --- simple parse for now
+        // parse the command --- simple parse for nowi
         let input = input.trim();
         eprintln!("user command: {}", input);
 
-        let request = match input.split_whitespace().collect::<Vec<&str>>().as_slice() {
+        let mut command_tokens: Vec<String> =
+            input.split_whitespace().map(|s| s.to_string()).collect();
+
+        if command_tokens.is_empty() {
+            continue;
+        }
+
+        command_tokens[0] = command_tokens[0].to_uppercase();
+
+        if (command_tokens[0] == "GET") && command_tokens.len() >= 2 {
+            command_tokens[1] = command_tokens[1].to_uppercase();
+        }
+
+        let command_str: Vec<&str> = command_tokens.iter().map(|s| s.as_str()).collect();
+
+        let request = match command_str.as_slice() {
             // as_slice() returns &[&str] -- like a slice of string slices
             ["PING"] => {
                 json!({"command" : "PING"})
@@ -47,6 +62,13 @@ fn main() {
             ["DELETE", key] => {
                 json!({"command" : "DELETE",
                 "key" : key})
+            }
+            ["GET", "BETWEEN", start, end] => {
+                json!({
+                    "command": "RANGE",
+                    "start" : start,
+                    "end" : end
+                })
             }
             _ => {
                 println!("Invalid command!");

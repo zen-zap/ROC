@@ -10,7 +10,7 @@ use std::path::Path;
 /// Write Ahead Logging [WAL]     
 /// append a command entry of type &Command
 pub(crate) fn store_log(com: &Command) {
-    let log_dir = Path::new("../logs");
+    let log_dir = Path::new("logs");
 
     if !log_dir.exists() {
         fs::create_dir(log_dir).expect("Unable to create the log directory");
@@ -39,6 +39,7 @@ pub(crate) fn store_log(com: &Command) {
     writer.flush().expect("Failed to flush wal.log");
 }
 
+/// helper function for reading from the WAL log
 pub(crate) fn read_wal() -> io::Result<Vec<Command>> {
     // we gotta return a vector of all the instructions
 
@@ -69,7 +70,7 @@ pub(crate) fn read_wal() -> io::Result<Vec<Command>> {
 pub(crate) fn save_checkpoint(msg: String) {
     eprintln!("Saving checkpoint: {:?}", msg);
 
-    let file_path = Path::new("../logs/health_checkpoints.log");
+    let file_path = Path::new("logs/health_checkpoints.log");
 
     let file = OpenOptions::new()
         .create(true)
@@ -105,7 +106,7 @@ pub(crate) fn save_checkpoint(msg: String) {
 pub(crate) fn get_health_checkpoint() -> Option<String> {
     eprintln!("getting health_checkpoint");
 
-    let file_path = Path::new("../logs/health_checkpoints.log");
+    let file_path = Path::new("logs/health_checkpoints.log");
 
     let data = match std::fs::read(file_path) {
         Ok(data) => data,
@@ -137,4 +138,17 @@ pub(crate) fn get_health_checkpoint() -> Option<String> {
             None
         }
     }
+}
+
+pub(crate) fn clear_wal() -> io::Result<()> {
+    let file_path = Path::new("logs/wal.log");
+
+    let _file = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open(file_path)
+        .expect("failed to open the file!");
+
+    Ok(())
 }
