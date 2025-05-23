@@ -1,34 +1,144 @@
-use serde::{self, Deserialize, Serialize};
+//! Actor model command interface for the async database engine.
+//!
+//! Each command is an operation that can be sent from a client handler to a database actor.
+//! Commands carry a reply channel (`respond_to`) to ensure responses are routed
+//! to the correct client or subsystem. This is the foundation for robust, concurrent, and scalable
+//! async processing in the system.
 
-#[derive(Debug, Serialize, Deserialize)]
+use tokio::sync::oneshot;
+
+/// The set of commands that can be sent to the database actor system.
+/// Each variant represents an operation that can be performed on the database,
+/// with a `respond_to` channel for sending the result or acknowledgment back to the requester.
+///
+/// This enum is central to the actor model architecture, ensuring all communication
+/// is explicit and type-safe.
+#[derive(Debug)]
 pub enum Command {
-    Ping,
+    /// Ping the server to check if it is alive and responsive.
+    ///
+    /// # Response
+    /// - Sends a simple acknowledgment via the `oneshot::Sender<()>`.
+    Ping {
+        /// Channel to send the acknowledgment.
+        respond_to: oneshot::Sender<()>,
+    },
+
+    /// Store a new key-value pair in the database.
+    ///
+    /// # Arguments
+    /// - `key`: The key to insert.
+    /// - `value`: The value to associate with the key.
+    ///
+    /// # Response
+    /// - Sends `Ok(())` if successful, or `Err(String)` with an error message.
     Store {
         key: String,
         value: usize,
+        respond_to: oneshot::Sender<Result<(), String>>,
     },
+
+    /// Fetch the value associated with a given key.
+    ///
+    /// # Arguments
+    /// - `key`: The key to look up.
+    ///
+    /// # Response
+    /// - Sends `Ok(Some(value))` if found, `Ok(None)` if not found, or `Err(String)` on error.
     Fetch {
         key: String,
-        value: Option<usize>,
+        respond_to: oneshot::Sender<Result<Option<usize>, String>>,
     },
+
+    /// Update the value for an existing key.
+    ///
+    /// # Arguments
+    /// - `key`: The key to update.
+    /// - `value`: The new value to associate with the key.
+    ///
+    /// # Response
+    /// - Sends `Ok(())` if updated, or `Err(String)` on failure.
     Update {
         key: String,
         value: usize,
+        respond_to: oneshot::Sender<Result<(), String>>,
     },
+
+    /// Delete a key-value pair from the database.
+    ///
+    /// # Arguments
+    /// - `key`: The key to remove.
+    ///
+    /// # Response
+    /// - Sends `Ok(Some((key, value)))` if deleted, `Ok(None)` if not found, or `Err(String)` on error.
     Delete {
         key: String,
+        respond_to: oneshot::Sender<Result<Option<(String, usize)>, String>>,
     },
+
+    /// Fetch all key-value pairs within a range of keys.
+    ///
+    /// # Arguments
+    /// - `start`: The start key (inclusive).
+    /// - `end`: The end key (inclusive).
+    ///
+    /// # Response
+    /// - Sends `Ok(Vec<(key, value)>)` if successful, or `Err(String)` on error.
     Range {
         start: usize,
         end: usize,
-        result: Vec<(String, usize)>,
+        respond_to: oneshot::Sender<Result<Vec<(String, usize)>, String>>,
     },
+
+    /// List all key-value pairs in the database.
+    ///
+    /// # Response
+    /// - Sends `Ok(Vec<(key, value)>)` if successful, or `Err(String)` on error.
     List {
-        entries: Vec<(String, usize)>,
+        respond_to: oneshot::Sender<Result<Vec<(String, usize)>, String>>,
     },
-    Shutdown,
-    Crash,
-    ERR {
-        msg: String,
+
+    /// Initiate a graceful shutdown of the database server.
+    ///
+    /// Can only be used by the admin
+    ///
+    /// # Response
+    /// - Sends `Ok(())` if shutdown is initiated, or `Err(String)` on error.
+    Shutdown {
+        respond_to: oneshot::Sender<Result<(), String>>,
+    },
+
+    /// Simulate or trigger a crash for testing recovery logic.
+    ///
+    /// Can only be used by the admin
+    ///
+    /// # Response
+    /// - Sends `Ok(())` if crash is triggered, or `Err(String)` on error.
+    Crash {
+        respond_to: oneshot::Sender<Result<(), String>>,
+    },
+
+    /// Terminates the current user connection gracefully.
+    ///
+    /// # Response
+    /// - Sends `Ok(())` if the connection is successfully terminated, or `Err(String)` on error.
+    Exit {
+        respond_to: oneshot::Sender<Result<(), String>>,
     },
 }
+
+// This is the start of the integration of the Actor Model with the database.
+//
+// So, for each command received from the user ... we will also pass the sender of that command
+// along with the command .. so that in case of multiple users .. we will who to send back to 
+//
+// For now, all commands will have the sender passed along with them for clear verification and
+// guarantee. Eventually, the senders will only be passed with FETCH, LIST, RANGE and DELETE commands.
+// The sender will always be passed with commands like SHUTDOWN and CRASH, since those are admin
+// exclusive commands. There will be only one admin account for controlling this thing.
+//
+// TODO: Add mechanism for single admin control and authentication.
+//
+// oneshot is single producer and single consumer channel -- since commands are per user -- 
+//
+// The documentation was generated by Github Copilot
