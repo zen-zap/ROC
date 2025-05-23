@@ -1,4 +1,4 @@
-//! src/store_actor.rs
+//! src/actors/store_actor.rs
 //!
 //! Contains the Store Actor implementation for handling all database storage-related commands
 //! using the Actor Model pattern. This actor exclusively manages the key-value store state
@@ -19,7 +19,7 @@ pub type StoreCommandSender = mpsc::Sender<Command>;
 /// and retrieval (Store, Fetch, Delete, Update, Range, List).
 ///
 /// # Example
-/// ```ignore
+/// ```rust
 /// let store_sender = spawn_store_actor();
 /// // Use store_sender to send storage commands.
 /// ```
@@ -37,17 +37,17 @@ pub fn spawn_store_actor() -> StoreCommandSender {
         while let Some(cmd) = rx.recv().await {
             match cmd {
                 // Stores a new key-value pair in the database.
-                Command::Store { key, value, respond_to } => {
+                Command::Set { key, value, respond_to } => {
                     db.insert(key, value);
                     let _ = respond_to.send(Ok(()));
                 },
                 // Fetches the value associated with a given key.
-                Command::Fetch { key, respond_to } => {
+                Command::Get { key, respond_to } => {
                     let val = db.get(&key).cloned();
                     let _ = respond_to.send(Ok(val));
                 },
                 // Deletes a key-value pair from the database.
-                Command::Delete { key, respond_to } => {
+                Command::Del { key, respond_to } => {
                     let deleted = db.remove(&key).map(|v| (key, v));
                     let _ = respond_to.send(Ok(deleted));
                 },

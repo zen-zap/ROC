@@ -1,2 +1,2 @@
-pub mod store_actor;
+pub mod actor::store_actor;
 pub mod command;
