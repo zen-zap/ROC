@@ -1,3 +1,5 @@
+//! src/store.rs
+//!
 //! Actor model command interface for the async database engine.
 //!
 //! Each command is an operation that can be sent from a client handler to a database actor.

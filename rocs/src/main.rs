@@ -1,5 +1,6 @@
 // ROC/rocs/src/main.rs
 
+mod store_actor;
 mod command;
 mod logger;
 mod recovery;

@@ -2,13 +2,10 @@
 #![allow(dead_code)]
 
 use crate::logger;
-
 use once_cell::sync::Lazy;
-// use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
-// can support range queries now ..
 use std::sync::RwLock;
 
 static STORE: Lazy<RwLock<BTreeMap<String, usize>>> = Lazy::new(|| RwLock::new(BTreeMap::new()));
@@ -74,7 +71,7 @@ pub fn load_store<P: AsRef<Path>>(path: P) -> std::io::Result<()> {
     }
 
     let db: BTreeMap<String, usize> =
-        serde_json::from_str(&data).expect("Derserialization into BTreeMap Failed!!");
+        serde_json::from_str(&data).expect("Deserialization into BTreeMap Failed!!");
 
     let mut store = STORE.write().unwrap();
     *store = db;
