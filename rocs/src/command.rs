@@ -26,7 +26,7 @@ pub enum Command {
     /// - Sends a simple acknowledgment via the `oneshot::Sender<()>`.
     Ping {
         /// Channel to send the acknowledgment.
-        respond_to: oneshot::Sender<()>,
+        respond_to: oneshot::Sender<String>,
     },
 
     /// Set a key-value pair in the database.
