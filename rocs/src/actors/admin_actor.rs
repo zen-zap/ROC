@@ -1,4 +1,4 @@
-use tokio::sync::{oneshot, mpsc};
+use tokio::sync::{mpsc};
 use crate::command::Command;
 
 pub type AdminCommandHandler = mpsc::Sender<Command>;
@@ -9,7 +9,7 @@ pub fn spawn_admin_actor() -> AdminCommandHandler {
 
     tokio::spawn(async move {
 
-        while Some(cmd) = rx.recv().await {
+        while let Some(cmd) = rx.recv().await {
             match cmd {
                 Command::Shutdown {
                     respond_to,

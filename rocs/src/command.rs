@@ -11,6 +11,8 @@
 
 use tokio::sync::oneshot;
 
+pub type UserId = String;
+
 /// The set of commands that can be sent to the database actor system.
 ///
 /// Each variant represents an operation that can be performed on the database,
@@ -25,6 +27,7 @@ pub enum Command {
     /// # Response
     /// - Sends a simple acknowledgment via the `oneshot::Sender<()>`.
     Ping {
+        user_id: UserId,
         /// Channel to send the acknowledgment.
         respond_to: oneshot::Sender<String>,
     },
@@ -38,8 +41,9 @@ pub enum Command {
     /// # Response
     /// - Sends `Ok(())` if successful, or `Err(String)` with an error message.
     Set {
+        user_id: UserId,
         key: String,
-        value: Vec<u8>,
+        value: usize,
         respond_to: oneshot::Sender<Result<(), String>>,
     },
 
@@ -51,8 +55,9 @@ pub enum Command {
     /// # Response
     /// - Sends `Ok(Some(value))` if found, `Ok(None)` if not found, or `Err(String)` on error.
     Get {
+        user_id: UserId,
         key: String,
-        respond_to: oneshot::Sender<Result<Option<Vec<u8>>, String>>,
+        respond_to: oneshot::Sender<Result<Option<usize>, String>>,
     },
 
     /// Delete a key-value pair from the database.
@@ -63,6 +68,7 @@ pub enum Command {
     /// # Response
     /// - Sends `Ok(())` if deleted, or `Err(String)` on error.
     Del {
+        user_id: UserId,
         key: String,
         respond_to: oneshot::Sender<Result<(), String>>,
     },
@@ -76,8 +82,9 @@ pub enum Command {
     /// # Response
     /// - Sends `Ok(())` if updated, or `Err(String)` on failure.
     Update {
+        user_id: UserId,
         key: String,
-        value: Vec<u8>,
+        value: usize,
         respond_to: oneshot::Sender<Result<(), String>>,
     },
 
@@ -90,9 +97,10 @@ pub enum Command {
     /// # Response
     /// - Sends `Ok(Vec<(key, value)>)` if successful, or `Err(String)` on error.
     Range {
+        user_id: UserId,
         start: String,
         end: String,
-        respond_to: oneshot::Sender<Result<Vec<(String, Vec<u8>)>, String>>,
+        respond_to: oneshot::Sender<Result<Vec<((String, String), usize)>, String>>,
     },
 
     /// List all key-value pairs in the database.
@@ -100,53 +108,8 @@ pub enum Command {
     /// # Response
     /// - Sends `Ok(Vec<(key, value)>)` if successful, or `Err(String)` on error.
     List {
-        respond_to: oneshot::Sender<Result<Vec<(String, Vec<u8>)>, String>>,
-    },
-
-    // Workspace management
-
-    /// Create a new workspace.
-    ///
-    /// # Arguments
-    /// - `name`: The name of the workspace to create.
-    ///
-    /// # Response
-    /// - Sends `Ok(())` if successful, or `Err(String)` on error.
-    CreateWorkspace {
-        name: String,
-        respond_to: oneshot::Sender<Result<(), String>>,
-    },
-
-    /// Drop (delete) an existing workspace.
-    ///
-    /// # Arguments
-    /// - `name`: The name of the workspace to drop.
-    ///
-    /// # Response
-    /// - Sends `Ok(())` if successful, or `Err(String)` on error.
-    DropWorkspace {
-        name: String,
-        respond_to: oneshot::Sender<Result<(), String>>,
-    },
-
-    /// Switch to a different workspace.
-    ///
-    /// # Arguments
-    /// - `name`: The name of the workspace to switch to.
-    ///
-    /// # Response
-    /// - Sends `Ok(())` if successful, or `Err(String)` on error.
-    SwitchWorkspace {
-        name: String,
-        respond_to: oneshot::Sender<Result<(), String>>,
-    },
-
-    /// List all available workspaces.
-    ///
-    /// # Response
-    /// - Sends `Ok(Vec<String>)` with workspace names, or `Err(String)` on error.
-    ListWorkspaces {
-        respond_to: oneshot::Sender<Result<Vec<String>, String>>,
+        user_id: UserId,
+        respond_to: oneshot::Sender<Result<Vec<((String, String), usize)>, String>>,
     },
 
     // Admin

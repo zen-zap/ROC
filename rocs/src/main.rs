@@ -1,88 +1,69 @@
 //! src/main.rs
 //!
 
+#![allow(warnings)]
+mod actors;
+mod command;
+mod initializer;
+mod router;
+
+use anyhow;
 use std::io;
 use tokio::{self};
+use tokio::net::TcpListener;
+use crate::router::route_cmd;
+use crate::initializer::initialize_system;
 
-fn main() {
+#[tokio::main(flavor = "multi_thread", worker_threads = 20)]
+async fn main() -> anyhow::Result<()> {
 
-    // look for clients
-    //
-    // connect with clients as they appear 
-    //
-    // have to make a separate actor thingy for adding and removing the client connections as they
-    // appear
-    //
-    // also .... first we gotta initialize the database before even starting with the clients
-    // then the client handler will be initialised .. that will call a routing module which will
-    // route commands of different types .. 
-    //
-    // store commands to store_actor module [ things like storing and updating things ]
-    // admin commands to admin_actor module [ things like shutting down the database or crashing ]
-    // user  commands to user_actor  module [ things like exit or logout ]
-    //
-    // there will be another actor that will store the logs .. 
-    // to store the logs we will need some kind of common data type that could be written into the
-    // log file and this will be binary type for better efficiency I guess ... 
-    // For the common data type, we could make a struct will all option fields having: key, value,
-    // err, comment. For each command, we can just set the non-existing fields to None .. 
-    //
-    // there will be another snapshot_actor module that will handle the snapshots ... 
-    // these will be taken when every 900kB of data is written into the log files
-    // after taking the snapshot the log file is flushed empty
-    //
-    // the snapshot events will also be logged in a separate file
-    //
-    // Now, when we publish this into crates.io ... people won't have the main.rs file .. so we
-    // need to have all functionality in seprate modules and just main to call everything and
-    // demonstrate stuff ... 
-    //
-    // the contents of main will be for example:
-    //
-    // initialize_logger() ---- every possible kind of event is stored in appropriately
-    //                          separated log files like under categories like 
-    //                          initialization events, store modifications, admin events, 
-    //                          user events
-    // initialize_store()
-    // initialize_admin_actor/handler() 
-    // initialize_user_actor/handler()
-    // initialize_event/command_router_actor()
-    //
-    // something like this ... 
+    let system = initialize_system().await;
+
+    let listener = TcpListener::bind("0.0.0.0:8080").await.expect("Error in binding the listener");
+
+    println!("Server running at http://0.0.0.0:8080");
+
+    loop {
+
+        let (socket, addr) = listener.accept().await?;
+
+        let system = system.clone(); 
+
+        tokio::spawn(async move {
+            if let Err(e) = handle_connection(socket, system).await {
+                eprintln!("Error with connection {}: {:?}", addr, e);
+            }
+        });
+
+    }
+}
+
+async fn handle_connection<S, System>(_socket: S, _system: System) -> anyhow::Result<()> {
+    // TODO: implement actual connection handling
+    Ok(())
 }
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+/*
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ **/
 
 
 
@@ -320,3 +301,49 @@ fn main() {
 //        }
 //    }
 //}
+//
+
+    // look for clients
+    //
+    // connect with clients as they appear 
+    //
+    // have to make a separate actor thingy for adding and removing the client connections as they
+    // appear
+    //
+    // also .... first we gotta initialize the database before even starting with the clients
+    // then the client handler will be initialised .. that will call a routing module which will
+    // route commands of different types .. 
+    //
+    // store commands to store_actor module [ things like storing and updating things ]
+    // admin commands to admin_actor module [ things like shutting down the database or crashing ]
+    // user  commands to user_actor  module [ things like exit or logout ]
+    //
+    // there will be another actor that will store the logs .. 
+    // to store the logs we will need some kind of common data type that could be written into the
+    // log file and this will be binary type for better efficiency I guess ... 
+    // For the common data type, we could make a struct will all option fields having: key, value,
+    // err, comment. For each command, we can just set the non-existing fields to None .. 
+    //
+    // there will be another snapshot_actor module that will handle the snapshots ... 
+    // these will be taken when every 900kB of data is written into the log files
+    // after taking the snapshot the log file is flushed empty
+    //
+    // the snapshot events will also be logged in a separate file
+    //
+    // Now, when we publish this into crates.io ... people won't have the main.rs file .. so we
+    // need to have all functionality in seprate modules and just main to call everything and
+    // demonstrate stuff ... 
+    //
+    // the contents of main will be for example:
+    //
+    // initialize_logger() ---- every possible kind of event is stored in appropriately
+    //                          separated log files like under categories like 
+    //                          initialization events, store modifications, admin events, 
+    //                          user events
+    // initialize_store()
+    // initialize_admin_actor/handler() 
+    // initialize_user_actor/handler()
+    // initialize_event/command_router_actor()
+    //
+    // something like this ... 
+

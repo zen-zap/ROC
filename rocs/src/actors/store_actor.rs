@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 use tokio::sync::mpsc;
 
 /// Type alias for the sender used to communicate with the store actor.
-pub type StoreCommandSender = mpsc::Sender<Command>;
+pub type StoreCommandHandler = mpsc::Sender<Command>;
 
 /// Spawns the store actor as a Tokio task, returning a sender that can be used
 /// to send storage-related `Command`s to the actor.
@@ -27,47 +27,52 @@ pub type StoreCommandSender = mpsc::Sender<Command>;
 /// # Design Note
 /// This actor should **not** handle commands unrelated to storage (such as Shutdown, Crash, etc.).
 /// Route such commands to other actors for better modularity and maintainability.
-pub fn spawn_store_actor() -> StoreCommandSender {
+pub fn spawn_store_actor() -> StoreCommandHandler {
     // Buffer size set to 128 for the mpsc channel.
     let (tx, mut rx) = mpsc::channel::<Command>(128);
 
     tokio::spawn(async move {
-        let mut db = BTreeMap::<String, usize>::new();
+        let mut db = BTreeMap::<(String, String), usize>::new();
 
         while let Some(cmd) = rx.recv().await {
             match cmd {
                 // Stores a new key-value pair in the database.
-                Command::Set { key, value, respond_to } => {
-                    db.insert(key, value);
+                Command::Set { user_id, key, value, respond_to } => {
+                    db.insert((user_id, key), value);
                     let _ = respond_to.send(Ok(()));
                 },
                 // Fetches the value associated with a given key.
-                Command::Get { key, respond_to } => {
-                    let val = db.get(&key).cloned();
+                Command::Get { user_id, key, respond_to } => {
+                    let val = db.get(&(user_id, key)).cloned();
                     let _ = respond_to.send(Ok(val));
                 },
                 // Deletes a key-value pair from the database.
-                Command::Del { key, respond_to } => {
-                    let deleted = db.remove(&key).map(|v| (key, v));
-                    let _ = respond_to.send(Ok(deleted));
+                Command::Del { user_id, key, respond_to } => {
+                    let _deleted = db.remove(&(user_id, key.clone())).map(|v| (key, v));
+                    let _ = respond_to.send(Ok(()));
                 },
                 // Updates the value for an existing key.
-                Command::Update { key, value, respond_to } => {
-                    db.insert(key, value);
+                Command::Update { user_id, key, value, respond_to } => {
+                    db.insert((user_id, key), value);
                     let _ = respond_to.send(Ok(()));
                 },
                 // Fetches all key-value pairs within a range of values.
-                Command::Range { start, end, respond_to } => {
+                Command::Range { user_id, start, end, respond_to } => {
                     let res = db
-                        .iter()
-                        .filter(|(_k, &v)| v >= start && v <= end)
-                        .map(|(k, &v)| (k.clone(), v))
+                        .range((user_id.clone(), start)..=(user_id.clone(), end))
+                        .map(|((u, k), &v)| ((u.clone(), k.clone()), v))
                         .collect();
+
                     let _ = respond_to.send(Ok(res));
                 },
                 // Lists all key-value pairs in the database.
-                Command::List { respond_to } => {
-                    let res = db.iter().map(|(k, &v)| (k.clone(), v)).collect();
+                Command::List { user_id, respond_to } => {
+                    let res = db
+                        .iter()
+                        .filter(|((u, _), _)| *u == user_id)
+                        .map(|((u, k), &v)| ((u.clone(), k.clone()), v))
+                        .collect();
+
                     let _ = respond_to.send(Ok(res));
                 },
                 // Any other command variant is considered out of scope for the store actor.

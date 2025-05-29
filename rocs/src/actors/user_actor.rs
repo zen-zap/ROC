@@ -1,10 +1,10 @@
 //! src/actors/user_actor.rs
 //!
 //! The user actor acts as the frontend/session proxy for user commands.
-//! It receives commands from the dispatcher, forwards them as needed to the store or workspace actors,
+//! It receives commands from the dispatcher, forwards them as needed to the store actors,
 //! and relays responses back to the user. This actor may also be extended with session logic, access control, etc.
 
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{mpsc};
 use crate::command::Command;
 
 /// Channel type alias for sending commands to a user actor.
@@ -13,58 +13,50 @@ pub type UserCommandHandler = mpsc::Sender<Command>;
 /// Channel type alias for sending commands to the store actor.
 pub type Sch = mpsc::Sender<Command>;
 
-/// Channel type alias for sending commands to the workspace actor.
-pub type Wch = mpsc::Sender<Command>;
-
 /// Spawns a user actor as an async task.
 ///
 /// # Arguments
 /// * `store_ah` - Sender to communicate with the store actor.
-/// * `workspace_ah` - Sender to communicate with the workspace actor.
 ///
 /// # Returns
 /// * `UserCommandHandler` - The sender to communicate with this user actor.
-pub fn spawn_user_actor(store_ah: Sch, workspace_ah: Wch) -> UserCommandHandler {
+pub fn spawn_user_actor(store_ah: Sch) -> UserCommandHandler {
     let (tx, mut rx) = mpsc::channel::<Command>(128);
 
     tokio::spawn(async move {
         while let Some(cmd) = rx.recv().await {
             match cmd {
                 // Forward storage commands to the store actor.
-                Command::Set { key, value, respond_to } => {
-                    // TODO: Forward to store_ah
+                // We don't really care about the fields here since the store actor does the
+                // unpacking for us.
+                Command::Set {..} => {
+                    if let Err(e) = store_ah.send(cmd).await
+                    {
+                        eprintln!("Failed to send the command to the store actor Set");
+                    }
                 }
-                Command::Get { key, respond_to } => {
-                    // TODO: Forward to store_ah
+                Command::Del {..} => {
+                    if let Err(e) = store_ah.send(cmd).await
+                    {
+                        eprintln!("Failed to send the command to the store actor Del");
+                    }
                 }
-                Command::Del { key, respond_to } => {
-                    // TODO: Forward to store_ah
+                Command::List {..} => {
+                    if let Err(e) = store_ah.send(cmd).await
+                    {
+                        eprintln!("Failed to send the command to the store actor List");
+                    }
                 }
-                Command::List { respond_to } => {
-                    // TODO: Forward to store_ah
-                }
-                Command::Range { start, end, respond_to } => {
-                    // TODO: Forward to store_ah
-                }
-
-                // Workspace management commands
-                Command::CreateWorkspace { name, respond_to } => {
-                    // TODO: Forward to workspace_ah
-                }
-                Command::ListWorkspaces { respond_to } => {
-                    // TODO: Forward to workspace_ah
-                }
-                Command::SwitchWorkspace { name, respond_to } => {
-                    // TODO: Forward to workspace_ah
-                }
-                Command::DropWorkspace { name, respond_to } => {
-                    // You might want to restrict this to admin only.
-                    // TODO: Forward or restrict as needed.
+                Command::Range {..} => {
+                    if let Err(e) = store_ah.send(cmd).await
+                    {
+                        eprintln!("Failed to send the command to the store actor Range");
+                    }
                 }
 
                 // Respond directly to Ping
-                Command::Ping { respond_to } => {
-                    let _ = respond_to.send("Server Running at ip:port".to_string());
+                Command::Ping {respond_to, ..} => {
+                    let _ = respond_to.send("Server Running!".to_string());
                     // TODO: Enhance Ping command to return server's network information.
                     //
                     // - On receiving Ping, respond with the server's current IP address and port.
