@@ -5,7 +5,7 @@ use std::io::{self, prelude::*, BufReader, Write};
 use std::net::TcpStream;
 
 fn main() {
-    let mut stream = TcpStream::connect("127.0.0.1:9879").expect("could not connect to server!");
+    let mut stream = TcpStream::connect("0.0.0.0:8080").expect("could not connect to server!");
 
     eprintln!("Waiting for command...");
     loop {

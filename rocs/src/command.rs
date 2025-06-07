@@ -32,6 +32,16 @@ pub enum Command {
         respond_to: oneshot::Sender<String>,
     },
 
+    /// HI command: Start or resume a user session.
+    /// - If `user_id` is None, server creates a new session/id.
+    /// - If `user_id` is Some, server checks validity and resumes or issues new id if needed.
+    /// 
+    /// Responds with the assigned/confirmed user id as String.
+    Hi {
+        user_id: Option<UserId>,
+        respond_to: oneshot::Sender<UserId>,
+    },
+
     /// Set a key-value pair in the database.
     ///
     /// # Arguments
