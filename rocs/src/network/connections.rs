@@ -1,8 +1,13 @@
-use anyhow;
-use quinn::{SendStream, RecvStream};
+use anyhow::Result;
+use quinn::{RecvStream, SendStream};
+use crate::router::ActorChannels;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-pub async fn handle_connection<S, System>(send: SendStream, recv: RecvStream, _system: System) -> anyhow::Result<()> {
-    // TODO: implement actual connection handling
-    Ok(())
+pub async fn handle_connection(
+	send: SendStream,
+	recv: RecvStream,
+	system: ActorChannels,
+) -> Result<()> {
+	
+	Ok(())
 }
-
