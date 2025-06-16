@@ -69,8 +69,10 @@ pub fn spawn_user_actor(store_ah: Sch) -> UserCommandHandler {
                 }
 
                 // Handle session exit
-                Command::Exit { respond_to } => {
+                Command::Exit { respond_to, user_id } => {
+                    println!("EXITING USER with user_id: {}", user_id);
                     // TODO: Perform session cleanup if needed
+                    let _ = respond_to.send(Ok(()));
                 }
 
                 // Ignore non-user commands

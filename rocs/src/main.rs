@@ -75,7 +75,7 @@ async fn main() -> anyhow::Result<()> {
 
                 let _ = match connection.accept_bi().await {
 
-                    Ok((send, recv)) => {
+                    Ok((mut send, mut recv)) => {
 
                         let system = system.clone(); 
                         // why do we clone again here?
@@ -91,7 +91,7 @@ async fn main() -> anyhow::Result<()> {
                     }
 
                     Err(quinn::ConnectionError::Reset) | Err(quinn::ConnectionError::ApplicationClosed{..}) => {
-                        // connection closed by client
+                        eprintln!("Connection closed by client");
                         break;
                     }
 

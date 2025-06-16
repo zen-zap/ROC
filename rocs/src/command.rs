@@ -156,6 +156,10 @@ pub enum Command {
         respond_to: oneshot::Sender<Result<(), String>>,
     },
 
+    Persist {
+        respond_to: oneshot::Sender<Result<(), String>>,
+    },
+
     // Introspection/meta
 
     /// Get statistics about the database or workspace.
@@ -207,6 +211,7 @@ pub enum Command {
     /// # Response
     /// - Sends `Ok(())` if the connection is successfully terminated, or `Err(String)` on error.
     Exit {
+        user_id: UserId,
         respond_to: oneshot::Sender<Result<(), String>>,
     },
 }
